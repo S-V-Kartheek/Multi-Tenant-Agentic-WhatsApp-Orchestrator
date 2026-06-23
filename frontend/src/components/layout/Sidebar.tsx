@@ -2,6 +2,7 @@
 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { UserButton } from '@clerk/clerk-react';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -145,6 +146,16 @@ export function Sidebar() {
             onClick={() => navigate(item.path)}
           />
         ))}
+        <div className="mt-2 flex items-center justify-center">
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                avatarBox: 'w-9 h-9 ring-2 ring-indigo-500/40 ring-offset-2 ring-offset-[#0A0F1E]',
+              },
+            }}
+          />
+        </div>
       </div>
     </div>
   );
