@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SignInButton, SignUpButton, useAuth } from '@clerk/clerk-react';
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import {
   MessageSquare, Bot, Zap, Shield, BarChart3, Users,
   ChevronRight, CheckCircle, Globe, Cpu, ArrowRight, Star, Play,
@@ -117,10 +116,11 @@ function TestimonialCard({ quote, name, role, company, avatar, delay }: {
   );
 }
 
-// ── Pricing tier ─────────────────────────────────────────────────────────────
+// ── Pricing card ─────────────────────────────────────────────────────────────
 function PricingCard({ tier, price, features, highlighted, delay }: {
   tier: string; price: string; features: string[]; highlighted?: boolean; delay: number;
 }) {
+  const navigate = useNavigate();
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -151,31 +151,27 @@ function PricingCard({ tier, price, features, highlighted, delay }: {
           </li>
         ))}
       </ul>
-      <SignUpButton>
-        <button className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
+      <button
+        onClick={() => navigate('/dashboard')}
+        className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${
           highlighted
             ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:shadow-lg hover:shadow-indigo-500/30 hover:scale-105'
             : 'bg-white/10 text-white hover:bg-white/20'
-        }`}>
-          Get Started Free
-        </button>
-      </SignUpButton>
+        }`}
+      >
+        Go to Dashboard
+      </button>
     </motion.div>
   );
 }
 
 // ── Main Landing Page ─────────────────────────────────────────────────────────
 export function LandingPage() {
-  const { isSignedIn } = useAuth();
   const navigate = useNavigate();
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll();
   const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -80]);
   const heroOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0]);
-
-  useEffect(() => {
-    if (isSignedIn) navigate('/dashboard');
-  }, [isSignedIn, navigate]);
 
   const features = [
     {
@@ -205,7 +201,7 @@ export function LandingPage() {
     },
     {
       icon: Shield, title: 'Enterprise Security', gradient: 'bg-gradient-to-br from-teal-600 to-teal-800',
-      description: 'Clerk-powered authentication, encrypted secrets via Render, and strict per-tenant data isolation at every layer.',
+      description: 'Encrypted secrets, strict per-tenant data isolation at every layer, and production-grade security baked in from day one.',
       delay: 0.6,
     },
   ];
@@ -213,11 +209,12 @@ export function LandingPage() {
   const testimonials = [
     { quote: 'Reduced our customer support load by 70% in the first month. The AI handles routine queries flawlessly.', name: 'Sarah Chen', role: 'Head of Customer Experience', company: 'TechFlow', avatar: 'SC', delay: 0.1 },
     { quote: 'Multi-tenant setup was a game-changer for our agency. Each client gets a fully isolated, branded AI assistant.', name: 'Marcus Rodriguez', role: 'CTO', company: 'AgencyPro', avatar: 'MR', delay: 0.2 },
-    { quote: 'The LangGraph agent handles context better than any chatbot we\'ve used. It actually remembers what users said.', name: 'Priya Patel', role: 'Product Manager', company: 'RetailNext', avatar: 'PP', delay: 0.3 },
+    { quote: "The LangGraph agent handles context better than any chatbot we've used. It actually remembers what users said.", name: 'Priya Patel', role: 'Product Manager', company: 'RetailNext', avatar: 'PP', delay: 0.3 },
   ];
 
   return (
     <div className="min-h-screen bg-[#030712] text-white overflow-x-hidden">
+
       {/* ── Navbar ────────────────────────────────────────────────────────── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-12 py-4 bg-[#030712]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-2.5">
@@ -232,16 +229,12 @@ export function LandingPage() {
           <a href="#how-it-works" className="text-sm text-slate-400 hover:text-white transition-colors">How it works</a>
           <a href="#pricing" className="text-sm text-slate-400 hover:text-white transition-colors">Pricing</a>
         </div>
-        <div className="flex items-center gap-3">
-          <SignInButton>
-            <button className="text-sm text-slate-300 hover:text-white transition-colors px-4 py-2">Sign in</button>
-          </SignInButton>
-          <SignUpButton>
-            <button className="text-sm bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-2 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/25">
-              Get Started
-            </button>
-          </SignUpButton>
-        </div>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="text-sm bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-2 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/25"
+        >
+          Open Dashboard →
+        </button>
       </nav>
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
@@ -256,7 +249,7 @@ export function LandingPage() {
         </div>
 
         {/* Grid lines */}
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2260%22%20height%3D%2260%22%3E%3Cpath%20d%3D%22M%2060%200%20L%200%200%200%2060%22%20fill%3D%22none%22%20stroke%3D%22rgba(255%2C255%2C255%2C0.03)%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E')] opacity-100 pointer-events-none" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2260%22%20height%3D%2260%22%3E%3Cpath%20d%3D%22M%2060%200%20L%200%200%200%2060%22%20fill%3D%22none%22%20stroke%3D%22rgba(255%2C255%2C255%2C0.03)%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E')] pointer-events-none" />
 
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="relative z-10 text-center px-6 max-w-5xl mx-auto">
           <motion.div
@@ -297,12 +290,13 @@ export function LandingPage() {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
           >
-            <SignUpButton>
-              <button className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl font-semibold text-base hover:opacity-90 transition-all hover:shadow-2xl hover:shadow-indigo-500/30 hover:scale-105 active:scale-100">
-                Start for Free
-                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-            </SignUpButton>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl font-semibold text-base hover:opacity-90 transition-all hover:shadow-2xl hover:shadow-indigo-500/30 hover:scale-105 active:scale-100"
+            >
+              Open Dashboard
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
             <a
               href="#how-it-works"
               className="flex items-center gap-2 px-8 py-4 bg-white/5 text-white rounded-2xl font-semibold text-base border border-white/10 hover:bg-white/10 transition-all"
@@ -352,7 +346,7 @@ export function LandingPage() {
             </div>
             {[
               { text: 'Do you have luxury sofas?', user: true },
-              { text: 'Yes! Here\'s our premium catalog 📋', user: false },
+              { text: "Yes! Here's our premium catalog 📋", user: false },
               { text: 'What are the prices?', user: true },
               { text: 'Sending you the price list now...', user: false },
             ].map((msg, i) => (
@@ -363,9 +357,7 @@ export function LandingPage() {
                 transition={{ delay: 0.8 + i * 0.3 }}
                 className={`flex mb-2 ${msg.user ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`rounded-xl px-3 py-1.5 text-xs max-w-[80%] ${
-                  msg.user ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-300'
-                }`}>
+                <div className={`rounded-xl px-3 py-1.5 text-xs max-w-[80%] ${msg.user ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-300'}`}>
                   {msg.text}
                 </div>
               </motion.div>
@@ -375,19 +367,17 @@ export function LandingPage() {
               transition={{ duration: 1.5, repeat: Infinity }}
               className="flex gap-1 mt-2 px-3"
             >
-              {[0, 1, 2].map(i => (
-                <div key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-              ))}
+              {[0, 1, 2].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-400" />)}
             </motion.div>
           </div>
         </motion.div>
       </section>
 
-      {/* ── Logos strip ────────────────────────────────────────────────────── */}
+      {/* ── Tech stack strip ───────────────────────────────────────────────── */}
       <section className="py-12 border-y border-white/5 bg-white/[0.02]">
         <p className="text-center text-slate-600 text-sm font-medium mb-8 uppercase tracking-widest">Built with industry-leading technology</p>
         <div className="flex flex-wrap items-center justify-center gap-10 px-6 opacity-50">
-          {['Google Gemini', 'LangGraph', 'FastAPI', 'MongoDB', 'Twilio', 'Clerk', 'React', 'Docker'].map(t => (
+          {['Google Gemini', 'LangGraph', 'FastAPI', 'MongoDB', 'Twilio', 'React', 'Docker', 'Render'].map(t => (
             <span key={t} className="text-slate-400 font-semibold text-sm">{t}</span>
           ))}
         </div>
@@ -401,7 +391,7 @@ export function LandingPage() {
             Everything you need
           </div>
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Enterprise-grade AI, <br />
+            Enterprise-grade AI,{' '}
             <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">ready to deploy</span>
           </h2>
           <p className="text-slate-400 max-w-xl mx-auto">
@@ -422,7 +412,8 @@ export function LandingPage() {
               The workflow
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-white">
-              From message to <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">intelligent response</span>
+              From message to{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">intelligent response</span>
             </h2>
           </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -485,23 +476,23 @@ export function LandingPage() {
       </section>
 
       {/* ── CTA ───────────────────────────────────────────────────────────── */}
-      <section className="py-32 px-6 text-center">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="max-w-3xl mx-auto">
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            <div className="w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
-          </div>
-          <h2 className="text-5xl font-black text-white mb-6 relative">
-            Ready to automate your <br />
+      <section className="py-32 px-6 text-center relative">
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div className="w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
+        </div>
+        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="max-w-3xl mx-auto relative">
+          <h2 className="text-5xl font-black text-white mb-6">
+            Ready to automate your{' '}
             <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">WhatsApp support?</span>
           </h2>
           <p className="text-slate-400 text-lg mb-10">Join hundreds of businesses using OrchestrAI to deliver instant, intelligent WhatsApp responses at scale.</p>
-          <SignUpButton>
-            <button className="group inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl font-bold text-lg hover:opacity-90 transition-all hover:shadow-2xl hover:shadow-indigo-500/40 hover:scale-105 active:scale-100">
-              Get started for free
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </SignUpButton>
-          <p className="text-slate-600 text-sm mt-4">No credit card required · Free forever plan available</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="group inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl font-bold text-lg hover:opacity-90 transition-all hover:shadow-2xl hover:shadow-indigo-500/40 hover:scale-105 active:scale-100"
+          >
+            Explore the Dashboard
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
         </motion.div>
       </section>
 
