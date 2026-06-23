@@ -212,20 +212,42 @@ INSTRUCTIONS:
 
     contents.append(types.Content(role="user", parts=inbound_parts))
 
-    # ── Call Gemini with tools ────────────────────────────────────────────────
+    # ── Call Gemini with tools (with retry for 503/429 API spikes) ────────────
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         tools=AGENT_TOOLS,
         temperature=0.7,
     )
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents,
-            config=config,
-        )
+    import time
+    max_retries = 3
+    response = None
+    
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+                config=config,
+            )
+            break # Success!
+        except Exception as e:
+            error_str = str(e)
+            if attempt < max_retries - 1 and ("503" in error_str or "429" in error_str):
+                logger.warning(f"⚠️ Gemini API overloaded (Attempt {attempt+1}/{max_retries}). Retrying in 2 seconds...")
+                time.sleep(2)
+            else:
+                logger.error(f"❌ LLM reasoning failed after {attempt+1} attempts: {e}", exc_info=True)
+                return {
+                    "response_type": "text",
+                    "response_text": "I'm sorry, I'm having trouble connecting to my brain right now due to high server demand. Please try asking again in a few seconds!",
+                    "sentiment_score": 0.5,
+                    "tool_chosen": None,
+                    "pipeline_status": "ERROR",
+                    "error_message": str(e),
+                }
 
+    try:
         part = response.candidates[0].content.parts[0]
 
         if not part.function_call:
@@ -241,7 +263,15 @@ INSTRUCTIONS:
 
         # ── Parse the function call ───────────────────────────────────────────
         fn_name = part.function_call.name
-        fn_args = dict(part.function_call.args)
+        # The new SDK provides arguments as a dict or Struct. We can convert it to a standard dict.
+        # It's usually accessible as part.function_call.args
+        fn_args = part.function_call.args
+        if hasattr(fn_args, "items"):
+            fn_args = dict(fn_args)
+        elif hasattr(fn_args, "__dict__"):
+            fn_args = fn_args.__dict__
+        else:
+            fn_args = {}
         sentiment = float(fn_args.get("sentiment_score", 0.7))
 
         logger.info(f"🤖 Gemini called tool: {fn_name} | sentiment: {sentiment:.2f}")
