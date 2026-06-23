@@ -7,6 +7,7 @@ Uses the official twilio-python SDK for reliable, production-grade messaging.
 Replaces the previous Meta Cloud API implementation.
 """
 import logging
+from typing import Any
 from twilio.rest import Client as TwilioClient
 from twilio.base.exceptions import TwilioRestException
 
@@ -18,8 +19,7 @@ logger = logging.getLogger(__name__)
 class WhatsAppService:
     """
     Wrapper around the Twilio WhatsApp API.
-    Uses the synchronous Twilio SDK called via asyncio's run_in_executor
-    to keep our FastAPI handlers fully non-blocking.
+    Uses the synchronous Twilio SDK.
     """
 
     def __init__(self):
@@ -67,7 +67,7 @@ class WhatsAppService:
         text: str,
         token: str,             # kept for interface compat (unused in Twilio)
         preview_url: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Send a WhatsApp text message via Twilio.
         """
@@ -94,7 +94,7 @@ class WhatsAppService:
         image_url: str,
         caption: str,
         token: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Send an image with an optional caption via Twilio.
         Twilio sends media via media_url and body as the caption.
@@ -124,7 +124,7 @@ class WhatsAppService:
         filename: str,
         caption: str,
         token: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Send a PDF or document via Twilio.
         Twilio delivers PDFs as media attachments (body = caption).
@@ -154,8 +154,8 @@ class WhatsAppService:
         template_name: str,
         language_code: str,
         token: str,
-        components: list = None,
-    ) -> dict:
+        components: list | None = None,
+    ) -> dict[str, Any]:
         """
         Broadcast via Twilio — sends a plain-text broadcast message.
         (Twilio sandbox doesn't have Meta-style pre-approved templates,

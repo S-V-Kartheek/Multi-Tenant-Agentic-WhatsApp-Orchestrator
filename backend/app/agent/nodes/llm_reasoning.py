@@ -1,7 +1,7 @@
 """
 agent/nodes/llm_reasoning.py — LangGraph Node 3: LLM Reasoning.
 
-The brain of the agent. Uses Google Gemini 1.5 Flash with function calling
+The brain of the agent. Uses Google Gemini 2.5 Flash with function calling
 to determine the appropriate response type (text, image, or document).
 
 Gemini is given 3 tools to call:
@@ -12,11 +12,16 @@ Gemini is given 3 tools to call:
 Also handles:
   - Bonus: Multimodal image analysis if customer sent an image
   - Bonus: Sentiment scoring for NEEDS_HUMAN detection
+
+Uses the new `google-genai` SDK (google.genai) — the deprecated
+`google.generativeai` package has been removed.
 """
 import logging
 import httpx
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+
 from app.agent.state import AgentState
 from app.config import get_settings
 
@@ -24,76 +29,76 @@ logger = logging.getLogger(__name__)
 
 # ── Tool Definitions for Gemini Function Calling ──────────────────────────────
 AGENT_TOOLS = [
-    genai.protos.Tool(
+    types.Tool(
         function_declarations=[
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="reply_with_text",
                 description=(
                     "Send a conversational text reply to the customer. "
                     "Use this for greetings, explanations, follow-up questions, "
                     "or any response that doesn't require a visual media asset."
                 ),
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "text": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "text": types.Schema(
+                            type=types.Type.STRING,
                             description="The reply text. Supports WhatsApp markdown (*bold*, _italic_).",
                         ),
-                        "sentiment_score": genai.protos.Schema(
-                            type=genai.protos.Type.NUMBER,
+                        "sentiment_score": types.Schema(
+                            type=types.Type.NUMBER,
                             description="Rate the customer's sentiment: 0.0=very frustrated, 1.0=very happy.",
                         ),
                     },
                     required=["text", "sentiment_score"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="send_catalog_document",
                 description=(
                     "Send a PDF document from the tenant's media library. "
                     "Use when the customer asks for catalogs, brochures, invoices, "
                     "price lists, spec sheets, or any document asset."
                 ),
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "query_term": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "query_term": types.Schema(
+                            type=types.Type.STRING,
                             description="Key term to look up in the media library (e.g. 'catalog', 'invoice', 'brochure').",
                         ),
-                        "caption": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "caption": types.Schema(
+                            type=types.Type.STRING,
                             description="Friendly accompanying message to send with the document.",
                         ),
-                        "sentiment_score": genai.protos.Schema(
-                            type=genai.protos.Type.NUMBER,
+                        "sentiment_score": types.Schema(
+                            type=types.Type.NUMBER,
                             description="Rate the customer's sentiment: 0.0=very frustrated, 1.0=very happy.",
                         ),
                     },
                     required=["query_term", "caption", "sentiment_score"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="send_product_image",
                 description=(
                     "Send an image from the tenant's media library. "
                     "Use when the customer asks to see products, showrooms, repair diagrams, "
                     "or any visual asset."
                 ),
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "query_term": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "query_term": types.Schema(
+                            type=types.Type.STRING,
                             description="Key term to look up in the media library (e.g. 'sofa', 'showroom', 'repair').",
                         ),
-                        "caption": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "caption": types.Schema(
+                            type=types.Type.STRING,
                             description="Friendly caption to display with the image.",
                         ),
-                        "sentiment_score": genai.protos.Schema(
-                            type=genai.protos.Type.NUMBER,
+                        "sentiment_score": types.Schema(
+                            type=types.Type.NUMBER,
                             description="Rate the customer's sentiment: 0.0=very frustrated, 1.0=very happy.",
                         ),
                     },
@@ -105,28 +110,34 @@ AGENT_TOOLS = [
 ]
 
 
-async def _download_and_encode_image(media_id: str, token: str) -> bytes | None:
+async def _download_image_bytes(media_url: str, token: str) -> bytes | None:
     """
-    Download a media file from Meta's API using its media_id.
+    Download a media file from a public URL (Twilio) or Meta's API (meta media_id).
     Used for multimodal analysis of images sent by the customer (bonus).
     """
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Step 1: Get the temporary download URL
-            url_resp = await client.get(
-                f"https://graph.facebook.com/v20.0/{media_id}",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            url_resp.raise_for_status()
-            download_url = url_resp.json().get("url")
+            # Twilio sends a direct URL; Meta sends a media_id that needs a lookup
+            if media_url.startswith("http"):
+                resp = await client.get(
+                    media_url,
+                    auth=(get_settings().twilio_account_sid, get_settings().twilio_auth_token),
+                )
+            else:
+                # Fallback: treat as Meta media_id
+                url_resp = await client.get(
+                    f"https://graph.facebook.com/v20.0/{media_url}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                url_resp.raise_for_status()
+                download_url = url_resp.json().get("url")
+                resp = await client.get(
+                    download_url,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
 
-            # Step 2: Download the actual image bytes
-            img_resp = await client.get(
-                download_url,
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            img_resp.raise_for_status()
-            return img_resp.content
+            resp.raise_for_status()
+            return resp.content
     except Exception as e:
         logger.warning(f"⚠️  Failed to download customer image: {e}")
         return None
@@ -144,7 +155,9 @@ async def llm_reasoning_node(state: AgentState) -> dict:
                    sentiment_score, tool_chosen
     """
     settings = get_settings()
-    genai.configure(api_key=settings.gemini_api_key)
+
+    # Initialise the new google-genai client
+    client = genai.Client(api_key=settings.gemini_api_key)
 
     tenant = state["tenant"]
 
@@ -163,47 +176,56 @@ INSTRUCTIONS:
 - Rate sentiment honestly — 0.25 or below means the customer is frustrated and needs a human agent."""
 
     # ── Build conversation history for Gemini ─────────────────────────────────
-    contents = []
+    contents: list[types.Content] = []
     for msg in state.get("chat_history", []):
-        contents.append({
-            "role": msg["role"],
-            "parts": [{"text": msg["content"]}],
-        })
+        role = msg["role"]   # "user" or "model"
+        contents.append(
+            types.Content(
+                role=role,
+                parts=[types.Part(text=msg["content"])],
+            )
+        )
 
     # ── Handle inbound media (Bonus: multimodal analysis) ─────────────────────
-    inbound_parts = []
+    inbound_parts: list[types.Part] = []
     if state.get("inbound_media_id") and state.get("inbound_media_mime", "").startswith("image/"):
-        img_bytes = await _download_and_encode_image(
-            media_id=state["inbound_media_id"],
+        img_bytes = await _download_image_bytes(
+            media_url=state["inbound_media_id"],
             token=tenant["whatsapp_token"],
         )
         if img_bytes:
-            inbound_parts.append({
-                "inline_data": {
-                    "mime_type": state["inbound_media_mime"],
-                    "data": img_bytes,
-                }
-            })
-            inbound_parts.append({"text": state.get("inbound_text") or "[Customer sent an image]"})
+            inbound_parts.append(
+                types.Part(
+                    inline_data=types.Blob(
+                        mime_type=state["inbound_media_mime"],
+                        data=img_bytes,
+                    )
+                )
+            )
+            inbound_parts.append(types.Part(text=state.get("inbound_text") or "[Customer sent an image]"))
         else:
-            inbound_parts.append({"text": state.get("inbound_text") or "[Customer sent an image — could not download]"})
+            inbound_parts.append(
+                types.Part(text=state.get("inbound_text") or "[Customer sent an image — could not download]")
+            )
     else:
-        inbound_parts.append({"text": state.get("inbound_text", "")})
+        inbound_parts.append(types.Part(text=state.get("inbound_text", "")))
 
-    contents.append({"role": "user", "parts": inbound_parts})
+    contents.append(types.Content(role="user", parts=inbound_parts))
 
     # ── Call Gemini with tools ────────────────────────────────────────────────
-    # gemini-1.5-flash was deprecated/removed by Google; gemini-2.5-flash is the
-    # current Flash model and supports the same function-calling contract.
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+    config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         tools=AGENT_TOOLS,
-        generation_config=genai.GenerationConfig(temperature=0.7),
+        temperature=0.7,
     )
 
     try:
-        response = model.generate_content(contents)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+            config=config,
+        )
+
         part = response.candidates[0].content.parts[0]
 
         if not part.function_call:
