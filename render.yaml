@@ -1,0 +1,10 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPRECATED: This project previously used Render.com for deployment.
+# It has been migrated to GCP Cloud Run.
+#
+# See: cloudbuild.yaml         ← CI/CD pipeline
+#      gcp/setup.sh            ← One-time GCP project setup
+#      gcp/deploy-backend.sh   ← Manual backend deploy
+#      gcp/deploy-frontend.sh  ← Manual frontend deploy
+#      README.md               ← Full deployment guide
+# ─────────────────────────────────────────────────────────────────────────────

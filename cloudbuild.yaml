@@ -1,0 +1,118 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# cloudbuild.yaml — GCP Cloud Build CI/CD Pipeline
+# Triggered automatically on push to `main` branch.
+#
+# Substitution variables (set in Cloud Build Trigger UI):
+#   _PROJECT_ID  — your GCP project ID
+#   _REGION      — GCP region (default: us-central1)
+#   _BACKEND_URL — Cloud Run backend HTTPS URL (set after first deploy)
+# ─────────────────────────────────────────────────────────────────────────────
+
+substitutions:
+  _PROJECT_ID: "YOUR_PROJECT_ID"          # ← Replace with your GCP project ID
+  _REGION: "us-central1"
+  _BACKEND_URL: "https://whatsapp-agent-backend-replace-after-first-deploy.a.run.app"
+  _AR_REPO: "whatsapp-agent"
+  _BACKEND_IMAGE: "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/backend"
+  _FRONTEND_IMAGE: "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/frontend"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_HIGHCPU_8"
+
+steps:
+  # ── Step 1: Build backend Docker image ──────────────────────────────────────
+  - id: "build-backend"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_BACKEND_IMAGE}:${SHORT_SHA}"
+      - "-t"
+      - "${_BACKEND_IMAGE}:latest"
+      - "--cache-from"
+      - "${_BACKEND_IMAGE}:latest"
+      - "./backend"
+    waitFor: ["-"]   # Start immediately
+
+  # ── Step 2: Build frontend Docker image (inject backend URL at build time) ──
+  - id: "build-frontend"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_FRONTEND_IMAGE}:${SHORT_SHA}"
+      - "-t"
+      - "${_FRONTEND_IMAGE}:latest"
+      - "--cache-from"
+      - "${_FRONTEND_IMAGE}:latest"
+      - "--build-arg"
+      - "VITE_API_BASE_URL=${_BACKEND_URL}"
+      - "./frontend"
+    waitFor: ["-"]   # Start immediately (parallel with build-backend)
+
+  # ── Step 3: Push backend image to Artifact Registry ─────────────────────────
+  - id: "push-backend"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "--all-tags", "${_BACKEND_IMAGE}"]
+    waitFor: ["build-backend"]
+
+  # ── Step 4: Push frontend image to Artifact Registry ────────────────────────
+  - id: "push-frontend"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "--all-tags", "${_FRONTEND_IMAGE}"]
+    waitFor: ["build-frontend"]
+
+  # ── Step 5: Deploy backend to Cloud Run ─────────────────────────────────────
+  - id: "deploy-backend"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "whatsapp-agent-backend"
+      - "--image=${_BACKEND_IMAGE}:${SHORT_SHA}"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--port=8080"
+      - "--min-instances=0"
+      - "--max-instances=10"
+      - "--memory=512Mi"
+      - "--cpu=1"
+      - "--timeout=300"
+      - "--concurrency=80"
+      - "--set-env-vars=MONGO_DB_NAME=whatsapp_agent,APP_ENV=production"
+      - >-
+        --set-secrets=MONGO_URI=MONGO_URI:latest,
+        GEMINI_API_KEY=GEMINI_API_KEY:latest,
+        TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,
+        TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,
+        TWILIO_WHATSAPP_NUMBER_TENANT_A=TWILIO_WHATSAPP_NUMBER_TENANT_A:latest,
+        TWILIO_WHATSAPP_NUMBER_TENANT_B=TWILIO_WHATSAPP_NUMBER_TENANT_B:latest
+    waitFor: ["push-backend"]
+
+  # ── Step 6: Deploy frontend to Cloud Run ────────────────────────────────────
+  - id: "deploy-frontend"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "whatsapp-agent-frontend"
+      - "--image=${_FRONTEND_IMAGE}:${SHORT_SHA}"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--port=8080"
+      - "--min-instances=0"
+      - "--max-instances=5"
+      - "--memory=256Mi"
+      - "--cpu=1"
+    waitFor: ["push-frontend"]
+
+images:
+  - "${_BACKEND_IMAGE}:${SHORT_SHA}"
+  - "${_BACKEND_IMAGE}:latest"
+  - "${_FRONTEND_IMAGE}:${SHORT_SHA}"
+  - "${_FRONTEND_IMAGE}:latest"
