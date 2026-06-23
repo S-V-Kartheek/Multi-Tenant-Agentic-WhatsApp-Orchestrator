@@ -10,7 +10,7 @@ A production-grade, multi-tenant WhatsApp AI agent built with **FastAPI**, **Lan
 ```
 WhatsApp User → Meta Cloud API → Cloud Run (FastAPI + LangGraph)
                                         ↓
-                              Gemini 1.5 Flash (tool calling)
+                              Gemini 2.5 Flash (tool calling)
                                         ↓
                               MongoDB Atlas (sessions + messages)
                                         ↓
