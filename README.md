@@ -3,7 +3,7 @@
 A production-grade, multi-tenant WhatsApp AI agent built with **FastAPI**, **LangGraph**, **Google Gemini**, and **MongoDB Atlas** — deployed on **GCP Cloud Run**.
 
 ---
-#Website Link: https://whatsapp-agent-dashboard-psi.vercel.app/dashboard
+#Website Link: https://whatsapp-agent-dashboard-psi.vercel.app/
 
 ## 🏗️ Architecture
 
